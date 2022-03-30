@@ -3,6 +3,7 @@ package sjdb;
 public class Estimator implements PlanVisitor {
 	public Estimator() {}
 
+	// scan - feed name relation into query plan
 	public void visit(Scan op) {
 		Relation input = op.getRelation();
 		Relation output = new Relation(input.getTupleCount());
@@ -14,6 +15,7 @@ public class Estimator implements PlanVisitor {
 		op.setOutput(output);
 	}
 
+	// projection - select certain attributes of a relation
 	public void visit(Project op) {
 		Relation input = op.getInput().getOutput();
 		Relation output = new Relation(input.getTupleCount());
@@ -26,15 +28,17 @@ public class Estimator implements PlanVisitor {
 
 		op.setOutput(output);
 	}
-	
+
+	// selection - select certain tuples of a relation, based on a predicate
 	public void visit(Select op) {
 		Relation input = op.getInput().getOutput();
 		Relation output;
 
 		if (op.getPredicate().equalsValue()) { // attr=val
 			Attribute predicateAttribute = input.getAttribute(op.getPredicate().getLeftAttribute());
+
 			int predicateAttributeCount = predicateAttribute.getValueCount();
-			output = new Relation(input.getTupleCount() - predicateAttributeCount);
+			output = new Relation(input.getTupleCount() / predicateAttributeCount);
 
 			for (Attribute attribute : input.getAttributes()) {
 				if (attribute.equals(predicateAttribute)) {
@@ -46,16 +50,49 @@ public class Estimator implements PlanVisitor {
 		} else { // attr=attr
 			Attribute leftPredicateAttribute = input.getAttribute(op.getPredicate().getLeftAttribute());
 			Attribute rightPredicateAttribute = input.getAttribute(op.getPredicate().getRightAttribute());
+
+			int distinctValuesCount = Math.min(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
+			int predicateAttributeCount = Math.max(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
+			output = new Relation(input.getTupleCount() / predicateAttributeCount);
+
+			for (Attribute attribute : input.getAttributes()) {
+				if (attribute.equals(leftPredicateAttribute) || attribute.equals(rightPredicateAttribute)) {
+					output.addAttribute(new Attribute(attribute.getName(), distinctValuesCount)); // set number of distinct values to min(V(R, A), V(R, B))
+				} else {
+					output.addAttribute(new Attribute(attribute));
+				}
+			}
 		}
 
 		op.setOutput(output);
 	}
-	
+
+	// product - cartesian product of inputs
 	public void visit(Product op) {
+		Relation leftInput = op.getLeft().getOutput();
+		Relation rightInput = op.getRight().getOutput();
+		Relation output = new Relation(leftInput.getTupleCount() * rightInput.getTupleCount());
 
+		for (Attribute attribute : leftInput.getAttributes()) {
+			output.addAttribute(new Attribute(attribute));
+		}
+
+		for (Attribute attribute : rightInput.getAttributes()) {
+			output.addAttribute(new Attribute(attribute));
+		}
+
+		op.setOutput(output);
 	}
-	
-	public void visit(Join op) {
 
+	// join - join inputs using a predicate
+	public void visit(Join op) {
+		Relation leftInput = op.getLeft().getOutput();
+		Relation rightInput = op.getRight().getOutput();
+
+		Attribute leftPredicateAttribute = leftInput.getAttribute(op.getPredicate().getLeftAttribute());
+		Attribute rightPredicateAttribute = rightInput.getAttribute(op.getPredicate().getRightAttribute());
+
+		int predicateAttributeCount = Math.max(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
+		Relation output = new Relation((leftInput.getTupleCount() / predicateAttributeCount) * (rightInput.getTupleCount() / predicateAttributeCount));
 	}
 }
