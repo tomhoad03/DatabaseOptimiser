@@ -52,7 +52,7 @@ public class Test {
 		
 		Project plan = new Project(s1, atts);
 		
-		return plan;
+		return s1;
 	}
 	
 }
