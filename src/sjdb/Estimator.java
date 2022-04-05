@@ -71,6 +71,7 @@ public class Estimator implements PlanVisitor {
 	public void visit(Product op) {
 		Relation leftInput = op.getLeft().getOutput();
 		Relation rightInput = op.getRight().getOutput();
+
 		Relation output = new Relation(leftInput.getTupleCount() * rightInput.getTupleCount());
 
 		for (Attribute attribute : leftInput.getAttributes()) {
@@ -84,7 +85,7 @@ public class Estimator implements PlanVisitor {
 		op.setOutput(output);
 	}
 
-	// join - join inputs using a predicate
+	// join - join inputs using a predicate (DOES NOT WORK ATM)
 	public void visit(Join op) {
 		Relation leftInput = op.getLeft().getOutput();
 		Relation rightInput = op.getRight().getOutput();
@@ -92,7 +93,28 @@ public class Estimator implements PlanVisitor {
 		Attribute leftPredicateAttribute = leftInput.getAttribute(op.getPredicate().getLeftAttribute());
 		Attribute rightPredicateAttribute = rightInput.getAttribute(op.getPredicate().getRightAttribute());
 
+		int distinctValuesCount = Math.min(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
 		int predicateAttributeCount = Math.max(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
-		Relation output = new Relation((leftInput.getTupleCount() / predicateAttributeCount) * (rightInput.getTupleCount() / predicateAttributeCount));
+		Relation output = new Relation((leftInput.getTupleCount() * rightInput.getTupleCount()) / predicateAttributeCount);
+
+		leftInput.getAttributes().addAll(rightInput.getAttributes());
+
+		for (Attribute attribute : leftInput.getAttributes()) {
+			if (attribute.equals(leftPredicateAttribute) || attribute.equals(rightPredicateAttribute)) {
+				output.addAttribute(new Attribute(attribute.getName(), distinctValuesCount)); // set number of distinct values to min(V(R, A), V(S, B))
+			} else {
+				output.addAttribute(new Attribute(attribute));
+			}
+		}
+
+		for (Attribute attribute : rightInput.getAttributes()) {
+			if (attribute.equals(leftPredicateAttribute) || attribute.equals(rightPredicateAttribute)) {
+				output.addAttribute(new Attribute(attribute.getName(), distinctValuesCount)); // set number of distinct values to min(V(R, A), V(S, B))
+			} else {
+				output.addAttribute(new Attribute(attribute));
+			}
+		}
+
+		op.setOutput(output);
 	}
 }
