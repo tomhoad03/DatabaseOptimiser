@@ -46,11 +46,13 @@ public class Optimiser {
                 Product productOp = (Product) plan;
 
                 // Check if left and right subtrees contain attributes, otherwise find next product
+                Boolean leftLeft = leftAttrLeft(productOp.getLeft(), leftAttribute);
+                Boolean rightRight = rightAttrRight(productOp.getRight(), rightAttribute);
 
-                if (leftAttrLeft() && rightAttrRight()) {
+                if (leftLeft && rightRight) {
                     selectResolved = true;
                     return plan;
-                } else if (leftAttrLeft() && !rightAttrRight()) {
+                } else if (leftLeft) {
                     return new Product(moveSelectDown(productOp.getLeft(), leftAttribute, rightAttribute), productOp.getRight());
                 } else {
                     return new Product(productOp.getLeft(), moveSelectDown(productOp.getRight(), leftAttribute, rightAttribute));
@@ -78,11 +80,29 @@ public class Optimiser {
         }
     }
 
-    public Boolean leftAttrLeft() {
-        return false;
+    public Boolean leftAttrLeft(Operator leftPlan, Attribute leftAttribute) {
+        try {
+            Scan scanOp = (Scan) leftPlan;
+            return scanOp.getOutput().getAttributes().contains(leftAttribute);
+        } catch (Exception e) {
+            if (leftPlan.getInputs().size() > 1) {
+                return leftAttrLeft(leftPlan.getInputs().get(0), leftAttribute) || leftAttrLeft(leftPlan.getInputs().get(1), leftAttribute);
+            } else {
+                return leftAttrLeft(leftPlan.getInputs().get(0), leftAttribute);
+            }
+        }
     }
 
-    public Boolean rightAttrRight() {
-        return false;
+    public Boolean rightAttrRight(Operator rightPlan, Attribute rightAttribute) {
+        try {
+            Scan scanOp = (Scan) rightPlan;
+            return scanOp.getOutput().getAttributes().contains(rightAttribute);
+        } catch (Exception e) {
+            if (rightPlan.getInputs().size() > 1) {
+                return rightAttrRight(rightPlan.getInputs().get(0), rightAttribute) || leftAttrLeft(rightPlan.getInputs().get(1), rightAttribute);
+            } else {
+                return rightAttrRight(rightPlan.getInputs().get(0), rightAttribute);
+            }
+        }
     }
 }
