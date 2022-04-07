@@ -89,9 +89,15 @@ public class Estimator implements PlanVisitor {
 	public void visit(Join op) {
 		Relation leftInput = op.getLeft().getOutput();
 		Relation rightInput = op.getRight().getOutput();
+		Attribute leftPredicateAttribute, rightPredicateAttribute;
 
-		Attribute leftPredicateAttribute = leftInput.getAttribute(op.getPredicate().getLeftAttribute());
-		Attribute rightPredicateAttribute = rightInput.getAttribute(op.getPredicate().getRightAttribute());
+		try {
+			leftPredicateAttribute = leftInput.getAttribute(op.getPredicate().getLeftAttribute());
+			rightPredicateAttribute = rightInput.getAttribute(op.getPredicate().getRightAttribute());
+		} catch (Exception e) {
+			leftPredicateAttribute = leftInput.getAttribute(op.getPredicate().getRightAttribute());
+			rightPredicateAttribute = rightInput.getAttribute(op.getPredicate().getLeftAttribute());
+		}
 
 		int distinctValuesCount = Math.min(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
 		int predicateAttributeCount = Math.max(leftPredicateAttribute.getValueCount(), rightPredicateAttribute.getValueCount());
