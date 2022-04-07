@@ -54,14 +54,15 @@ public class Test {
 		
 		Select s1 = new Select(p2, new Predicate(new Attribute("PNUMBER"), new Attribute("PNO")));
 		Select s2 = new Select(s1, new Predicate(new Attribute("PNAME"), "Aquarius"));
+		Select s3 = new Select(s2, new Predicate(new Attribute("ESSN"), new Attribute("SSN")));
+		Select s4 = new Select(s3, new Predicate(new Attribute("BDATE"), "1957-12-31"));
 
-		// ArrayList<Attribute> atts = new ArrayList<Attribute>();
-		// atts.add(new Attribute("a2"));
-		// atts.add(new Attribute("b1"));
-		//
-		// Project plan = new Project(s1, atts);
+		ArrayList<Attribute> atts = new ArrayList<>();
+		atts.add(new Attribute("LNAME"));
 
-		return s2;
+		Project plan = new Project(s4, atts);
+
+		return plan;
 	}
 	
 }
