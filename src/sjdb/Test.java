@@ -49,8 +49,8 @@ public class Test {
 		Scan b = new Scan(cat.getRelation("Works_On"));
 		Scan c = new Scan(cat.getRelation("Project"));
 
-		Product p1 = new Product(a, b);
-		Product p2 = new Product(p1, c);
+		Product p1 = new Product(c, b);
+		Product p2 = new Product(p1, a);
 		
 		Select s1 = new Select(p2, new Predicate(new Attribute("PNUMBER"), new Attribute("PNO")));
 		Select s2 = new Select(s1, new Predicate(new Attribute("PNAME"), "Aquarius"));
