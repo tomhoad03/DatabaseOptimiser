@@ -15,6 +15,7 @@ public class Optimiser {
 
     /*
     https://secure.ecs.soton.ac.uk/notes/comp3211/2021/gk/Query_Processing_20_21.pdf
+    https://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/5-query-opt/left-deep-trees.html
 
     1. Start with canonical form.
     2. Move select operators down.
@@ -27,9 +28,9 @@ public class Optimiser {
 
     public Operator optimise(Operator plan) {
         Operator selectPlan = selectOptimise(plan);
-        Operator restrictivePlan = restrictiveOptimise(selectPlan);
-        Operator joinPlan = joinOptimise(restrictivePlan);
-        return projectOptimise(joinPlan);
+        Operator joinPlan = joinOptimise(selectPlan);
+        Operator projectPlan = projectOptimise(joinPlan);
+        return restrictiveOptimise(projectPlan);
     }
 
     // Move select operators down
@@ -49,31 +50,20 @@ public class Optimiser {
         } catch (Exception ignored) { }
 
         try {
-            Scan scanPlan = (Scan) newPlan;
-            return scanPlan;
+            Select selectPlan = (Select) newPlan;
+
+            if (currentSelect.equals(selectPlan.toString())) {
+                return selectOptimise(selectPlan.getInput());
+            } else {
+                currentSelect = selectPlan.toString();
+                return selectOptimise(selectPlan);
+            }
         } catch (Exception e1) {
             try {
                 Project projectPlan = (Project) newPlan;
                 return new Project(selectOptimise(projectPlan.getInput()), projectPlan.getAttributes());
             } catch (Exception e2) {
-                try {
-                    Select selectPlan = (Select) newPlan;
-
-                    if (currentSelect.equals(selectPlan.toString())) {
-                        return selectPlan;
-                    } else {
-                        currentSelect = selectPlan.toString();
-                        return selectOptimise(selectPlan);
-                    }
-                } catch (Exception e3) {
-                    try {
-                        Product productPlan = (Product) newPlan;
-                        return new Product(selectOptimise(productPlan.getLeft()), selectOptimise(productPlan.getRight()));
-                    } catch (Exception e4) {
-                        Join joinPlan = (Join) newPlan;
-                        return new Join(selectOptimise(joinPlan.getLeft()), selectOptimise(joinPlan.getRight()), joinPlan.getPredicate());
-                    }
-                }
+                return plan;
             }
         }
     }
@@ -166,11 +156,6 @@ public class Optimiser {
                 return isInSubtree(plan.getInputs().get(0), attribute);
             }
         }
-    }
-
-    // Reorder subtrees to put most restrictive select first
-    public Operator restrictiveOptimise(Operator plan) {
-        return plan;
     }
 
     // Combine product and select to create join
@@ -294,5 +279,10 @@ public class Optimiser {
                 }
             }
         }
+    }
+
+    // Reorder subtrees to put most restrictive select first
+    public Operator restrictiveOptimise(Operator plan) {
+        return plan;
     }
 }

@@ -28,18 +28,18 @@ public class Test {
 	public static Catalogue createCatalogue() {
 		Catalogue cat = new Catalogue();
 
-		cat.createRelation("Employee", 3);
-		cat.createAttribute("Employee", "ESSN", 100);
-		cat.createAttribute("Employee", "BDATE", 100);
-		cat.createAttribute("Employee", "LNAME", 15);
+		cat.createRelation("Employee", 20);
+		cat.createAttribute("Employee", "ESSN", 90);
+		cat.createAttribute("Employee", "BDATE", 60);
+		cat.createAttribute("Employee", "LNAME", 30);
 
-		cat.createRelation("Works_On", 3);
+		cat.createRelation("Works_On", 15);
 		cat.createAttribute("Works_On", "SSN", 100);
-		cat.createAttribute("Works_On", "PNO", 15);
+		cat.createAttribute("Works_On", "PNO", 50);
 
-		cat.createRelation("Project", 3);
+		cat.createRelation("Project", 10);
 		cat.createAttribute("Project", "PNUMBER", 100);
-		cat.createAttribute("Project", "PNAME", 15);
+		cat.createAttribute("Project", "PNAME", 50);
 		
 		return cat;
 	}
@@ -49,8 +49,8 @@ public class Test {
 		Scan b = new Scan(cat.getRelation("Works_On"));
 		Scan c = new Scan(cat.getRelation("Project"));
 
-		Product p1 = new Product(c, b);
-		Product p2 = new Product(p1, a);
+		Product p1 = new Product(a, b);
+		Product p2 = new Product(p1, c);
 		
 		Select s1 = new Select(p2, new Predicate(new Attribute("PNUMBER"), new Attribute("PNO")));
 		Select s2 = new Select(s1, new Predicate(new Attribute("PNAME"), "Aquarius"));
