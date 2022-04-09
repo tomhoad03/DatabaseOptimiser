@@ -16,7 +16,6 @@ public class Optimiser {
 
     /*
     https://secure.ecs.soton.ac.uk/notes/comp3211/2021/gk/Query_Processing_20_21.pdf
-    https://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/5-query-opt/left-deep-trees.html
 
     1. Start with canonical form.
     2. Move select operators down.
@@ -34,12 +33,13 @@ public class Optimiser {
         return projectOptimise(joinPlan);
     }
 
-    // Reorder subtrees to put most restrictive select first
+    // Reorder subtrees to put the relation with the least tuples first
     public Operator orderingOptimise(Operator plan) {
         try {
             Product productPlan = (Product) plan;
             ArrayList<Scan> scans = new ArrayList<>();
 
+            // Find all the relations in the canonical query
             while (isProduct(productPlan.getLeft())) {
                 scans.add((Scan) productPlan.getRight());
                 productPlan = (Product) productPlan.getLeft();
@@ -47,14 +47,15 @@ public class Optimiser {
             scans.add((Scan) productPlan.getLeft());
             scans.add((Scan) productPlan.getRight());
 
+            // Sort the relations by their size
             scans.sort(Comparator.comparingInt(o -> o.getOutput().getAttributes().size()));
-
             Product leftProducts = new Product(scans.get(0), scans.get(1));
 
             for (int i = 2; i < scans.size(); i++) {
                 leftProducts = new Product(leftProducts, scans.get(i));
             }
 
+            // Return the canonical form with the relations reordered
             return leftProducts;
         } catch (Exception e1) {
             try {
@@ -67,6 +68,7 @@ public class Optimiser {
         }
     }
 
+    // Used to check if at the bottom of left-deep tree
     public boolean isProduct(Operator plan) {
         try {
             Product productPlan = (Product) plan;
@@ -84,6 +86,7 @@ public class Optimiser {
             Select selectPlan = (Select) plan;
             Predicate selectPredicate = selectPlan.getPredicate();
 
+            // Different method for moving down if attr=attr or attr=value
             if (selectPredicate.equalsValue()) {
                 newPlan = moveSelectDown1(selectPlan.getInput(), selectPredicate);
             } else {
@@ -95,6 +98,7 @@ public class Optimiser {
         try {
             Select selectPlan = (Select) newPlan;
 
+            // Check if fully optimised
             if (currentSelect.equals(selectPlan.toString())) {
                 return selectPlan;
             } else {
@@ -106,7 +110,7 @@ public class Optimiser {
                 Project projectPlan = (Project) newPlan;
                 return new Project(selectOptimise(projectPlan.getInput()), projectPlan.getAttributes());
             } catch (Exception e2) {
-                return plan;
+                return newPlan;
             }
         }
     }
@@ -117,6 +121,7 @@ public class Optimiser {
             try {
                 Scan scanPlan = (Scan) plan;
 
+                // Place the select above relation that contains attr
                 if (scanPlan.getOutput().getAttributes().contains(predicate.getLeftAttribute())) {
                     selectResolved = true;
                     return new Select(scanPlan, predicate);
@@ -150,6 +155,7 @@ public class Optimiser {
                 } catch (Exception e2) {
                     Product productPlan = (Product) plan;
 
+                    // Place the select above the join that contains subtrees that each contains one of the attributes
                     Boolean leftLeft = isInSubtree(productPlan.getLeft(), predicate.getLeftAttribute());
                     Boolean rightRight = isInSubtree(productPlan.getRight(), predicate.getRightAttribute());
 
@@ -168,6 +174,7 @@ public class Optimiser {
         }
     }
 
+    // Is the attribute in a relation in this operators tree
     public Boolean isInSubtree(Operator plan, Attribute attribute) {
         try {
             Scan scanPlan = (Scan) plan;
@@ -194,6 +201,7 @@ public class Optimiser {
                 try {
                     Select selectPlan = (Select) plan;
 
+                    // Combine an attr=attr select with the product below
                     try {
                         Product productPlan = (Product) selectPlan.getInput();
                         return new Join(joinOptimise(productPlan.getLeft()), joinOptimise(productPlan.getRight()), selectPlan.getPredicate());
@@ -201,13 +209,8 @@ public class Optimiser {
                         return new Select(joinOptimise(selectPlan.getInput()), selectPlan.getPredicate());
                     }
                 } catch (Exception e3) {
-                    try {
-                        Product productPlan = (Product) plan;
-                        return new Product(joinOptimise(productPlan.getLeft()), joinOptimise(productPlan.getRight()));
-                    } catch (Exception e4) {
-                        Join joinPlan = (Join) plan;
-                        return new Join(joinOptimise(joinPlan.getLeft()), joinOptimise(joinPlan.getRight()), joinPlan.getPredicate());
-                    }
+                    Join joinPlan = (Join) plan;
+                    return new Join(joinOptimise(joinPlan.getLeft()), joinOptimise(joinPlan.getRight()), joinPlan.getPredicate());
                 }
             }
         }
@@ -222,6 +225,7 @@ public class Optimiser {
             try {
                 Project projectPlan = (Project) plan;
 
+                // Create projects for each
                 for (Attribute projectAttribute : projectPlan.getAttributes()) {
                     projectAbove = true;
                     projectPlan = new Project(createProjects(projectPlan.getInput(), projectAttribute), projectPlan.getAttributes());
@@ -239,14 +243,10 @@ public class Optimiser {
                         return new Product(projectOptimise(productPlan.getLeft()), projectOptimise(productPlan.getRight()));
                     } catch (Exception e4) {
                         Join joinPlan = (Join) plan;
-                        if (!joinPlan.getPredicate().equalsValue()) {
-                            if (isInSubtree(joinPlan.getLeft(), joinPlan.getPredicate().getLeftAttribute())) {
-                                return new Join(createProjects(projectOptimise(joinPlan.getLeft()), joinPlan.getPredicate().getLeftAttribute()), createProjects(projectOptimise(joinPlan.getRight()), joinPlan.getPredicate().getRightAttribute()), joinPlan.getPredicate());
-                            } else {
-                                return new Join(createProjects(projectOptimise(joinPlan.getLeft()), joinPlan.getPredicate().getRightAttribute()), createProjects(projectOptimise(joinPlan.getRight()), joinPlan.getPredicate().getLeftAttribute()), joinPlan.getPredicate());
-                            }
+                        if (isInSubtree(joinPlan.getLeft(), joinPlan.getPredicate().getLeftAttribute())) {
+                            return new Join(createProjects(projectOptimise(joinPlan.getLeft()), joinPlan.getPredicate().getLeftAttribute()), createProjects(projectOptimise(joinPlan.getRight()), joinPlan.getPredicate().getRightAttribute()), joinPlan.getPredicate());
                         } else {
-                            return new Join(projectOptimise(joinPlan.getLeft()), projectOptimise(joinPlan.getRight()), joinPlan.getPredicate());
+                            return new Join(createProjects(projectOptimise(joinPlan.getLeft()), joinPlan.getPredicate().getRightAttribute()), createProjects(projectOptimise(joinPlan.getRight()), joinPlan.getPredicate().getLeftAttribute()), joinPlan.getPredicate());
                         }
                     }
                 }
@@ -254,10 +254,12 @@ public class Optimiser {
         }
     }
 
+    // Create a new project operator
     public Operator createProjects(Operator plan, Attribute attribute) {
         try {
             Scan scanPlan = (Scan) plan;
 
+            // Add a projection above a relation
             if (scanPlan.getOutput().getAttributes().contains(attribute) && !projectAbove) {
                 return new Project(scanPlan, new ArrayList<>(Collections.singleton(attribute)));
             } else {
@@ -268,6 +270,7 @@ public class Optimiser {
             try {
                 Project projectPlan = (Project) plan;
 
+                // Add an attribute to an existing projection
                 if (!projectPlan.getAttributes().contains(attribute) && isInSubtree(projectPlan, attribute)) {
                     projectPlan.getAttributes().add(attribute);
                     projectAbove = true;
@@ -278,6 +281,7 @@ public class Optimiser {
                 try {
                     Select selectPlan = (Select) plan;
 
+                    // Add a projection above an attr=value selection
                     if (!projectAbove && isInSubtree(selectPlan, attribute)) {
                         return new Project(selectPlan, new ArrayList<>(Collections.singleton(attribute)));
                     } else {
@@ -285,19 +289,14 @@ public class Optimiser {
                         return selectPlan;
                     }
                 } catch (Exception e3) {
-                    try {
-                        Product productPlan = (Product) plan;
-                        projectAbove = false;
-                        return new Product(createProjects(productPlan.getLeft(), attribute), createProjects(productPlan.getRight(), attribute));
-                    } catch (Exception e4) {
-                        Join joinPlan = (Join) plan;
+                    Join joinPlan = (Join) plan;
 
-                        if (!projectAbove && isInSubtree(joinPlan, attribute)) {
-                            return new Project(new Join(createProjects(joinPlan.getLeft(), attribute), createProjects(joinPlan.getRight(), attribute), joinPlan.getPredicate()), new ArrayList<>(Collections.singleton(attribute)));
-                        } else {
-                            projectAbove = false;
-                            return new Join(createProjects(joinPlan.getLeft(), attribute), createProjects(joinPlan.getRight(), attribute), joinPlan.getPredicate());
-                        }
+                    // Add a projection above a join
+                    if (!projectAbove && isInSubtree(joinPlan, attribute)) {
+                        return new Project(new Join(createProjects(joinPlan.getLeft(), attribute), createProjects(joinPlan.getRight(), attribute), joinPlan.getPredicate()), new ArrayList<>(Collections.singleton(attribute)));
+                    } else {
+                        projectAbove = false;
+                        return new Join(createProjects(joinPlan.getLeft(), attribute), createProjects(joinPlan.getRight(), attribute), joinPlan.getPredicate());
                     }
                 }
             }
