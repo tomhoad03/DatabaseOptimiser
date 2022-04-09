@@ -2,6 +2,7 @@ package sjdb;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 
 public class Optimiser {
     private final Catalogue catalogue;
@@ -27,10 +28,52 @@ public class Optimiser {
      */
 
     public Operator optimise(Operator plan) {
-        Operator selectPlan = selectOptimise(plan);
+        Operator orderingPlan = orderingOptimise(plan);
+        Operator selectPlan = selectOptimise(orderingPlan);
         Operator joinPlan = joinOptimise(selectPlan);
-        Operator projectPlan = projectOptimise(joinPlan);
-        return restrictiveOptimise(projectPlan);
+        return projectOptimise(joinPlan);
+    }
+
+    // Reorder subtrees to put most restrictive select first
+    public Operator orderingOptimise(Operator plan) {
+        try {
+            Product productPlan = (Product) plan;
+            ArrayList<Scan> scans = new ArrayList<>();
+
+            while (isProduct(productPlan.getLeft())) {
+                scans.add((Scan) productPlan.getRight());
+                productPlan = (Product) productPlan.getLeft();
+            }
+            scans.add((Scan) productPlan.getLeft());
+            scans.add((Scan) productPlan.getRight());
+
+            scans.sort(Comparator.comparingInt(o -> o.getOutput().getAttributes().size()));
+
+            Product leftProducts = new Product(scans.get(0), scans.get(1));
+
+            for (int i = 2; i < scans.size(); i++) {
+                leftProducts = new Product(leftProducts, scans.get(i));
+            }
+
+            return leftProducts;
+        } catch (Exception e1) {
+            try {
+                Project projectPlan = (Project) plan;
+                return new Project(orderingOptimise(projectPlan.getInput()), projectPlan.getAttributes());
+            } catch (Exception e2) {
+                Select selectPlan = (Select) plan;
+                return new Select(orderingOptimise(selectPlan.getInput()), selectPlan.getPredicate());
+            }
+        }
+    }
+
+    public boolean isProduct(Operator plan) {
+        try {
+            Product productPlan = (Product) plan;
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // Move select operators down
@@ -53,7 +96,7 @@ public class Optimiser {
             Select selectPlan = (Select) newPlan;
 
             if (currentSelect.equals(selectPlan.toString())) {
-                return selectOptimise(selectPlan.getInput());
+                return selectPlan;
             } else {
                 currentSelect = selectPlan.toString();
                 return selectOptimise(selectPlan);
@@ -82,21 +125,11 @@ public class Optimiser {
                 }
             } catch (Exception e1) {
                 try {
-                    Project projectPlan = (Project) plan;
-                    return new Project(moveSelectDown1(projectPlan.getInput(), predicate), projectPlan.getAttributes());
+                    Select selectPlan = (Select) plan;
+                    return new Select(moveSelectDown1(selectPlan.getInput(), predicate), selectPlan.getPredicate());
                 } catch (Exception e2) {
-                    try {
-                        Select selectPlan = (Select) plan;
-                        return new Select(moveSelectDown1(selectPlan.getInput(), predicate), selectPlan.getPredicate());
-                    } catch (Exception e3) {
-                        try {
-                            Product productPlan = (Product) plan;
-                            return new Product(moveSelectDown1(productPlan.getLeft(), predicate), moveSelectDown1(productPlan.getRight(), predicate));
-                        } catch (Exception e4) {
-                            Join joinPlan = (Join) plan;
-                            return new Join(moveSelectDown1(joinPlan.getLeft(), predicate), moveSelectDown1(joinPlan.getRight(), predicate), joinPlan.getPredicate());
-                        }
-                    }
+                    Product productPlan = (Product) plan;
+                    return new Product(moveSelectDown1(productPlan.getLeft(), predicate), moveSelectDown1(productPlan.getRight(), predicate));
                 }
             }
         } else {
@@ -112,31 +145,21 @@ public class Optimiser {
                 return scanPlan;
             } catch (Exception e1) {
                 try {
-                    Project projectPlan = (Project) plan;
-                    return new Project(moveSelectDown2(projectPlan.getInput(), predicate), projectPlan.getAttributes());
+                    Select selectPlan = (Select) plan;
+                    return new Select(moveSelectDown2(selectPlan.getInput(), predicate), selectPlan.getPredicate());
                 } catch (Exception e2) {
-                    try {
-                        Select selectPlan = (Select) plan;
-                        return new Select(moveSelectDown2(selectPlan.getInput(), predicate), selectPlan.getPredicate());
-                    } catch (Exception e3) {
-                        try {
-                            Product productPlan = (Product) plan;
+                    Product productPlan = (Product) plan;
 
-                            Boolean leftLeft = isInSubtree(productPlan.getLeft(), predicate.getLeftAttribute());
-                            Boolean rightRight = isInSubtree(productPlan.getRight(), predicate.getRightAttribute());
+                    Boolean leftLeft = isInSubtree(productPlan.getLeft(), predicate.getLeftAttribute());
+                    Boolean rightRight = isInSubtree(productPlan.getRight(), predicate.getRightAttribute());
 
-                            if ((leftLeft && rightRight) || (!leftLeft && !rightRight)) {
-                                selectResolved = true;
-                                return new Select(productPlan, predicate);
-                            } else if (leftLeft) {
-                                return new Product(moveSelectDown2(productPlan.getLeft(), predicate), productPlan.getRight());
-                            } else {
-                                return new Product(productPlan.getLeft(), moveSelectDown2(productPlan.getRight(), predicate));
-                            }
-                        } catch (Exception e4) {
-                            Join joinOp = (Join) plan;
-                            return new Join(moveSelectDown2(joinOp.getLeft(), predicate), moveSelectDown2(joinOp.getRight(), predicate), joinOp.getPredicate());
-                        }
+                    if ((leftLeft && rightRight) || (!leftLeft && !rightRight)) {
+                        selectResolved = true;
+                        return new Select(productPlan, predicate);
+                    } else if (leftLeft) {
+                        return new Product(moveSelectDown2(productPlan.getLeft(), predicate), productPlan.getRight());
+                    } else {
+                        return new Product(productPlan.getLeft(), moveSelectDown2(productPlan.getRight(), predicate));
                     }
                 }
             }
@@ -279,10 +302,5 @@ public class Optimiser {
                 }
             }
         }
-    }
-
-    // Reorder subtrees to put most restrictive select first
-    public Operator restrictiveOptimise(Operator plan) {
-        return plan;
     }
 }
